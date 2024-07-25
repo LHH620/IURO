@@ -15,3 +15,5 @@ We generate a small dataset for online serving evaluation, including candidate u
 The goal of online serving is to dynamically recommend high-quality aha items (selected from candidate item pool) to candidate users, empowering industrial recommender systems together with traditional models, such as CTR models.
 
 3. We have made some improvements to the original IURO to make it more suitable for online serving. Although this has a negative impact on offline evaluation slightly, it is well known that online retention improvements in industry recommender systems should be more of a concern than offline evaluation. Some of the latest online evaluation will be presented in our subsequent work.
+
+4. using conda to create an environment, i am using conda 23.10.0, and it can create python 3.6.8 environment.

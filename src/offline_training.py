@@ -4,7 +4,7 @@ import time
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 import sys
 from data_process import DataInputTrain, DataInputTest
@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 random.seed(1234)
 np.random.seed(1234)
-tf.compat.v1.set_random_seed(1234)
+tf.set_random_seed(1234)
 train_batch_size = 64
 test_batch_size = 128
 
@@ -90,7 +90,7 @@ def save_model_out(_sess, _model, _model_save_path):
 
 
 # offline training
-gpu_options = tf.compat.v1.GPUOptions(allow_growth=True)
+gpu_options = tf.GPUOptions(allow_growth=True)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
   model = Model(user_count,sex_count,province_count, city_count, answer_count, topic_count)
   sess.run(tf.global_variables_initializer())

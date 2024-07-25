@@ -10,7 +10,7 @@ class Model(object):
     def __init__(self, user_count,sex_count,province_count, city_count, item_count, topic_count):
 
         with tf.name_scope('init_param'):
-            self.regularizer=tf.contrib.layers.l2_regularizer(0.0001)
+            self.regularizer=tf.keras.regularizers.l2(0.0001)
             self.hidden_units=64
             self.aug_weight=0.3
             self.neg_weight=0.3
@@ -402,14 +402,14 @@ class Model(object):
             self.logits_sigmoid = tf.sigmoid(self.logits_attention)
             self.sup = tf.ones([tf.shape(self.supervised_signals_click)[0], ], tf.float32)
 
-            self.loss_mse_attention = tf.compat.v1.losses.mean_squared_error(labels=self.y, predictions=self.logits_attention,
+            self.loss_mse_attention = tf.losses.mean_squared_error(labels=self.y, predictions=self.logits_attention,
                                                                    weights=((self.sup) * (
                                                                            self.sup + 0.3 * self.supervised_signals_click + 1.6 * self.supervised_signals_impression)))
             self.cl_loss = tf.maximum(0.0, tf.abs(self.logits_click - self.aug_logits) - tf.abs(
                 self.logits_click - self.neg_logits) + self.margin)
 
             # positive
-            self.loss_mse_topk_positive = tf.compat.v1.losses.mean_squared_error(labels=self.y,
+            self.loss_mse_topk_positive = tf.losses.mean_squared_error(labels=self.y,
                                                                        predictions=self.logits_topk_positive, weights=(
                             (self.sup) * (self.sup + 0.04 * self.supervised_signals_click + 0.04 * self.supervised_signals_impression)))
             self.kl_loss_positive = kl_for_log_prob(tf.nn.log_softmax(self.logits_attention),
@@ -418,20 +418,20 @@ class Model(object):
             self.loss_positive = tf.reduce_mean(
                 self.loss_mse_attention + self.loss_mse_topk_positive + self.cl_loss + 100 * self.kl_loss_positive)
             trainable_params = tf.trainable_variables()
-            self.opt_positive = tf.compat.v1.train.AdamOptimizer(self.lr)
+            self.opt_positive = tf.train.AdamOptimizer(self.lr)
             self.gradients_positive = tf.gradients(self.loss_positive, trainable_params)
             clip_gradients_positive, _ = tf.clip_by_global_norm(self.gradients_positive, 5)
             self.train_op_positive = self.opt_positive.apply_gradients(zip(clip_gradients_positive, trainable_params),
                                                                        global_step=self.global_step)
             # negative
             self.loss_negative = tf.reduce_mean(self.loss_mse_attention + self.cl_loss)
-            self.opt_negative = tf.compat.v1.train.AdamOptimizer(self.lr)
+            self.opt_negative = tf.train.AdamOptimizer(self.lr)
             self.gradients_negative = tf.gradients(self.loss_negative, trainable_params)
             clip_gradients_negative, _ = tf.clip_by_global_norm(self.gradients_negative, 5)
             self.train_op_negative = self.opt_negative.apply_gradients(zip(clip_gradients_negative, trainable_params),
                                                                        global_step=self.global_step)
         with tf.name_scope('basic_info'):
-            self.saver = tf.compat.v1.train.Saver()
+            self.saver = tf.train.Saver()
             self.init_op = tf.global_variables_initializer()
             self.local_init_op = tf.local_variables_initializer()
     def train_offline(self, sess, uij, l, is_positive=False):
