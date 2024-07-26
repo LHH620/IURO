@@ -5,248 +5,326 @@ import pandas as pd
 import numpy as np
 import math
 from warnings import simplefilter
-simplefilter(action="ignore",category=FutureWarning)
+simplefilter(action="ignore", category=FutureWarning)
 
-model_save_path="../model_save/auc"
-answer_info_file="../dataset/answer_infos.txt"
-user_info_file="../dataset/user_infos.txt"
-ui_transaction_file="../dataset/zhihu1M.txt"
+model_save_path = "../model_save/auc"
+answer_info_file = "../dataset/answer_infos.txt"
+user_info_file = "../dataset/user_infos.txt"
+ui_transaction_file = "../dataset/zhihu1M.txt"
+
 
 def dataset_7_3_split(datafile_path):
     '''
     split the dataset into train and test set, here zhihurec dataset is splited by time, the first 7 days is train set, the last 3 days is test set
     '''
-    f6 = open("../dataset/zhihu1M_7_3_split.txt","w")
+    f6 = open("../dataset/zhihu1M_7_3_split.txt", "w")
     history_length = []
-    future_return=0
-    future_not_return=0
+    future_return = 0
+    future_not_return = 0
     for line in open(datafile_path, "r", encoding='utf-8'):
-        ss = line[:-1].split('\t')
-        cc = ss[2].split(',')
+        samples = line.strip().split('\t')         # 
+        interactions = samples[2].split(',')    # 交互记录
         item_seven_days = []
         item_three_days = []
-        for i in range(len(cc)):
-            ww = cc[i].split('|')
-            if int(ww[1]) > 1525279257 + 7 * 24 * 60 * 60:
-                item_three_days.append(cc[i])
+        for i in range(len(interactions)):
+            answer_id, present_time, clicked_time = interactions[i].split('|')
+            if intpresent_time > 1525279257 + 7 * 24 * 60 * 60:
+                item_three_days.append(interactions[i])
             else:
-                item_seven_days.append(cc[i])
+                item_seven_days.append(interactions[i])
         str = ','
         if len(item_seven_days) != 0:
-            if len(item_three_days)==0:
-                future_return+=1
+            if len(item_three_days) == 0:
+                future_return += 1
             else:
-                future_not_return+=1
+                future_not_return += 1
             history_length.append(len(item_seven_days))
-            f6.write(ss[0] + "\t" + str.join(item_seven_days) + "\t" + str.join(item_three_days))
+            f6.write(samples[0] + "\t" + str.join(item_seven_days) +
+                     "\t" + str.join(item_three_days))
             f6.write("\n")
     return "../dataset/zhihu1M_7_3_split.txt"
-def index_generate(interaction_file_path,answer_info_file,user_info_file):
-    dict_user={}
-    dict_sex={}
-    dict_province={}
-    dict_city={}
-    dict_answer={}
-    dict_topic={}
-    dict_author={}
-    user_count=0
-    sex_count=0
-    province_count=0
-    city_count=0
-    answer_count=0
-    topic_count=0
-    author_count=0
-    for line in open(interaction_file_path,"r",encoding='utf-8'):
+
+
+def index_generate(interaction_file_path, answer_info_file, user_info_file):
+    dict_user = {}
+    dict_sex = {}
+    dict_province = {}
+    dict_city = {}
+    dict_answer = {}
+    dict_topic = {}
+    dict_author = {}
+    
+    # 统计用户交互信息
+    for line in open(interaction_file_path, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
-        if line[0] not in dict_user.keys():
-            # user_count = user_count + 1
-            dict_user[line[0]] = user_count
-            user_count = user_count + 1
+        user_id = line[0]
+        if user_id not in dict_user:
+            dict_user[user_id] = len(dict_user)
         answers = line[2].split(',')
         for answer in answers:
-            if answer.split('|')[0] not in dict_answer.keys():
-                # answer_count = answer_count + 1
-                dict_answer[answer.split('|')[0]] = answer_count
-                answer_count = answer_count + 1
-    for line in open(user_info_file,"r",encoding='utf-8'):
+            answer_id = answer.split('|')[0]
+            if answer_id not in dict_answer:
+                dict_answer[answer_id] = len(dict_answer)
+    
+    # 统计用户信息           
+    for line in open(user_info_file, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
-        if line[0] in dict_user.keys():
-            sex=line[2]
-            province=line[-3]
-            city=line[-2]
-            if sex not in dict_sex.keys():
-                # sex_count=sex_count+1
-                dict_sex[sex]=sex_count
-                sex_count = sex_count + 1
-            if province not in dict_province.keys():
-                # province_count=province_count+1
-                dict_province[province]=province_count
-                province_count = province_count + 1
-            if city not in dict_city.keys():
-                # city_count=city_count+1
-                dict_city[city]=city_count
-                city_count = city_count + 1
+        user_id = line[0]
+        if user_id in dict_user:
+            sex = line[2]
+            province = line[-3]
+            city = line[-2]
+            if sex not in dict_sex:
+                dict_sex[sex] = len(dict_sex)
+            if province not in dict_province:
+                dict_province[province] = len(dict_province)
+            if city not in dict_city:
+                dict_city[city] = len(dict_city)
+
+    # 统计话题和回答信息
     for line in open(answer_info_file, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
-        if line[0] in dict_answer.keys():
-            topics=line[17].strip(' ')
-            topics=topics[:-1].split(',')
+        user_id = line[0]
+        if user_id in dict_answer:
+            topics = line[17].strip(' ')
+            topics = topics[:-1].split(',')
             for topic in topics:
-                if topic not in dict_topic.keys():
-                    # topic_count = topic_count + 1
-                    dict_topic[topic] = topic_count
-                    topic_count = topic_count + 1
-        if line[0] in dict_answer.keys():
-            author= line[3].split(',')[0]
-            if author not in dict_author.keys():
-                # author_count=author_count+1
-                dict_author[author]=author_count
-                author_count = author_count + 1
-    return dict_user,dict_sex,dict_province,dict_city,dict_answer,dict_topic,dict_author,user_count,sex_count,province_count,city_count,answer_count,topic_count,author_count
+                if topic not in dict_topic:
+                    dict_topic[topic] = len(dict_topic)
+                    
+        if user_id in dict_answer:
+            author = line[3].split(',')[0]
+            if author not in dict_author:
+                dict_author[author] = len(dict_author)
+    
+    user_count = len(dict_user)
+    sex_count = len(dict_sex)
+    province_count = len(dict_province)
+    city_count = len(dict_city)
+    answer_count = len(dict_answer)
+    topic_count = len(dict_topic)
+    author_count = len(dict_author)
+    
+    return dict_user, dict_sex, dict_province, dict_city, dict_answer, dict_topic, dict_author, user_count, sex_count, province_count, city_count, answer_count, topic_count, author_count
 
-
-def delete_answer_without_train_in_test(file_path,dict_answer):
-    write_path="../dataset/zhihu1M_7_3_split_without_train_in_test.txt"
-    write = open(write_path, 'w')
-    for line in open(file_path, "r", encoding='utf-8'):
-        line = line[:-1].strip('\n').split('\t')
-        test_items = line[2].split(',')
-        if len(line[2].split(',')[-1].split('|')) != 1:
+def index_generate(interaction_file_path, answer_info_file, user_info_file):
+    dict_user = {}
+    dict_sex = {}
+    dict_province = {}
+    dict_city = {}
+    dict_answer = {}
+    dict_topic = {}
+    dict_author = {}
+    
+    # 统计用户交互信息
+    with open(interaction_file_path, "r", encoding='utf-8') as file:
+        for line in file:
+            line = line.strip('\n').split('\t')
+            user_id = line[0]
+            if user_id not in dict_user:
+                dict_user[user_id] = len(dict_user)
             answers = line[2].split(',')
-            for answer in answers[::-1]:
-                if answer.split('|')[0] not in dict_answer.keys():
-                    answers.remove(answer)
-            test_items = answers
-        str = ','
-        write.write(line[0] + "\t" + line[1] + "\t" + str.join(test_items))
-        write.write("\n")
-        write.flush()
+            for answer in answers:
+                answer_id = answer.split('|')[0]
+                if answer_id not in dict_answer:
+                    dict_answer[answer_id] = len(dict_answer)
+    
+    # 统计用户信息
+    with open(user_info_file, "r", encoding='utf-8') as file:
+        for line in file:
+            line = line.strip('\n').split('\t')
+            user_id = line[0]
+            if user_id in dict_user:
+                sex = line[2]
+                province = line[-3]
+                city = line[-2]
+                if sex not in dict_sex:
+                    dict_sex[sex] = len(dict_sex)
+                if province not in dict_province:
+                    dict_province[province] = len(dict_province)
+                if city not in dict_city:
+                    dict_city[city] = len(dict_city)
+
+    # 统计话题和回答信息
+    with open(answer_info_file, "r", encoding='utf-8') as file:
+        for line in file:
+            line = line.strip('\n').split('\t')
+            answer_id = line[0]  # 使用 answer_id 而不是 user_id
+            if answer_id in dict_answer:
+                topics = line[17].strip(' ').split(',')
+                for topic in topics:
+                    if topic not in dict_topic:
+                        dict_topic[topic] = len(dict_topic)
+                author = line[3].split(',')[0]
+                if author not in dict_author:
+                    dict_author[author] = len(dict_author)
+    
+    user_count = len(dict_user)
+    sex_count = len(dict_sex)
+    province_count = len(dict_province)
+    city_count = len(dict_city)
+    answer_count = len(dict_answer)
+    topic_count = len(dict_topic)
+    author_count = len(dict_author)
+    
+    return (dict_user, dict_sex, dict_province, dict_city,
+            dict_answer, dict_topic, dict_author,
+            user_count, sex_count, province_count, city_count,
+            answer_count, topic_count, author_count)
+
+def delete_answer_without_train_in_test(file_path, dict_answer):
+    write_path = "../dataset/zhihu1M_7_3_split_without_train_in_test.txt"
+    with open(write_path, 'w', encoding='utf-8') as write:
+        with open(file_path, "r", encoding='utf-8') as read:
+            for line in read:
+                line = line.strip('\n').split('\t')
+                test_items = line[2].split(',')
+                filtered_items = [item for item in test_items if item.split('|')[0] in dict_answer]
+                # 如果过滤后列表为空，可以选择保留原行（取决于实际需求）
+                # 这里假设我们希望过滤掉所有不在训练集中的回答
+                if filtered_items:
+                    write.write(line[0] + "\t" + line[1] + "\t" + ','.join(filtered_items) + "\n")
     return write_path
-def user_infos_generate(dict_user,dict_sex,dict_province,dict_city,user_info_file):
-    user_infos={}
-    for line in open(user_info_file,"r",encoding='utf-8'):
+
+
+def user_infos_generate(dict_user, dict_sex, dict_province, dict_city, user_info_file):
+    user_infos = {}
+    for line in open(user_info_file, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
         if line[0] in dict_user.keys():
-            sex=line[2]
-            province=line[-3]
-            city=line[-2]
-            user_infos[dict_user[line[0]]]=[dict_sex[sex],dict_province[province],dict_city[city]]
+            sex = line[2]
+            province = line[-3]
+            city = line[-2]
+            user_infos[dict_user[line[0]]] = [dict_sex[sex],
+                                              dict_province[province], dict_city[city]]
     return user_infos
-def answer_infos_generate(dict_answer,dict_topic,dict_author,answer_info_file):
-    answer_infos={}
-    for line in open(answer_info_file,"r"):
-        line=line[:-1].strip('\n').split('\t')
+
+
+def answer_infos_generate(dict_answer, dict_topic, dict_author, answer_info_file):
+    answer_infos = {}
+    for line in open(answer_info_file, "r"):
+        line = line[:-1].strip('\n').split('\t')
         if line[0] in dict_answer.keys():
-            author=line[3]
-            topics=line[17].strip(' ')
-            topics=topics[:-1].split(',')
-            t=[]
+            author = line[3]
+            topics = line[17].strip(' ')
+            topics = topics[:-1].split(',')
+            t = []
             for topic in topics:
                 t.append(dict_topic[topic])
-            answer_infos[dict_answer[line[0]]]=[t,dict_author[author]]
+            answer_infos[dict_answer[line[0]]] = [t, dict_author[author]]
     return answer_infos
 
-def retention_label_generate(first_day_items,second_day_items,third_day_items,first_day_clicks,second_day_clicks,third_day_clicks):
-    label_retention=[]
-    ss_click=[]
-    ss_impression=[]
+
+def retention_label_generate(first_day_items, second_day_items, third_day_items, first_day_clicks, second_day_clicks, third_day_clicks):
+    label_retention = []
+    ss_click = []
+    ss_impression = []
     future_click_item = []
     future_impression_item = []
 
     for i in range(len(first_day_items)):
-        label_click_1=0
-        label_click_2=0
-        lable_click_3=0
-        label_impression_1=0
-        label_impression_2=0
-        lable_impression_3=0
+        label_click_1 = 0
+        label_click_2 = 0
+        lable_click_3 = 0
+        label_impression_1 = 0
+        label_impression_2 = 0
+        lable_impression_3 = 0
 
         label_1 = 0
         label_2 = 0
         label_3 = 0
-        first_index_impression = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] != -1)[0].tolist()
-        second_index_impression = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] != -1)[0].tolist()
-        third_index_impression = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] != -1)[0].tolist()
-        if len(first_index_impression)>0:
-            label_1=1
-        if len(second_index_impression)>0:
-            label_2=1
-        if len(third_index_impression)>0:
-            label_3=1
-        label=label_1+label_2+label_3
+        first_index_impression = np.where(
+            first_day_clicks[i, 0:len(first_day_clicks[0])] != -1)[0].tolist()
+        second_index_impression = np.where(
+            second_day_clicks[i, 0:len(second_day_clicks[0])] != -1)[0].tolist()
+        third_index_impression = np.where(
+            third_day_clicks[i, 0:len(third_day_clicks[0])] != -1)[0].tolist()
+        if len(first_index_impression) > 0:
+            label_1 = 1
+        if len(second_index_impression) > 0:
+            label_2 = 1
+        if len(third_index_impression) > 0:
+            label_3 = 1
+        label = label_1+label_2+label_3
         label_retention.append(label)
 
         # the number of clilcks
-        future_ci=[]
-        first_index_click = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 1)[0].tolist()
-        second_index_click = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 1)[0].tolist()
-        third_index_click = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 1)[0].tolist()
-        if len(first_index_click)>0:
-            label_click_1=len(first_index_click)
+        future_ci = []
+        first_index_click = np.where(
+            first_day_clicks[i, 0:len(first_day_clicks[0])] == 1)[0].tolist()
+        second_index_click = np.where(
+            second_day_clicks[i, 0:len(second_day_clicks[0])] == 1)[0].tolist()
+        third_index_click = np.where(
+            third_day_clicks[i, 0:len(third_day_clicks[0])] == 1)[0].tolist()
+        if len(first_index_click) > 0:
+            label_click_1 = len(first_index_click)
             future_ci.extend(first_day_items[i][first_index_click])
-        if len(second_index_click)>0:
-            label_click_2=len(second_index_click)
+        if len(second_index_click) > 0:
+            label_click_2 = len(second_index_click)
             future_ci.extend(second_day_items[i][second_index_click])
-        if len(third_index_click)>0:
-            lable_click_3=len(third_index_click)
+        if len(third_index_click) > 0:
+            lable_click_3 = len(third_index_click)
             future_ci.extend(third_day_items[i][third_index_click])
-        click_count=label_click_1+label_click_2+lable_click_3
-        ss_click.append(math.log(1+click_count,math.e))
-        #if click_count>0:
-
-
+        click_count = label_click_1+label_click_2+lable_click_3
+        ss_click.append(math.log(1+click_count, math.e))
+        # if click_count>0:
 
         # the number of impressions
-        future_im=[]
-        first_index_unclick = np.where(first_day_clicks[i, 0:len(first_day_clicks[0])] == 0)[0].tolist()
-        second_index_unclick = np.where(second_day_clicks[i, 0:len(second_day_clicks[0])] == 0)[0].tolist()
-        third_index_unclick = np.where(third_day_clicks[i, 0:len(third_day_clicks[0])] == 0)[0].tolist()
-        if len(first_index_unclick)>0:
-            label_impression_1=len(first_index_unclick)
+        future_im = []
+        first_index_unclick = np.where(
+            first_day_clicks[i, 0:len(first_day_clicks[0])] == 0)[0].tolist()
+        second_index_unclick = np.where(
+            second_day_clicks[i, 0:len(second_day_clicks[0])] == 0)[0].tolist()
+        third_index_unclick = np.where(
+            third_day_clicks[i, 0:len(third_day_clicks[0])] == 0)[0].tolist()
+        if len(first_index_unclick) > 0:
+            label_impression_1 = len(first_index_unclick)
             future_im.extend(first_day_items[i][first_index_unclick])
-        if len(second_index_unclick)>0:
-            label_impression_2=len(second_index_unclick)
+        if len(second_index_unclick) > 0:
+            label_impression_2 = len(second_index_unclick)
             future_im.extend(second_day_items[i][second_index_unclick])
-        if len(third_index_unclick)>0:
-            lable_impression_3=len(third_index_unclick)
+        if len(third_index_unclick) > 0:
+            lable_impression_3 = len(third_index_unclick)
             future_im.extend(third_day_items[i][third_index_unclick])
-        impression_count=label_impression_1+label_impression_2+lable_impression_3
-        ss_impression.append(math.log(1+impression_count,math.e))
+        impression_count = label_impression_1+label_impression_2+lable_impression_3
+        ss_impression.append(math.log(1+impression_count, math.e))
         future_click_item.append(future_ci)
         future_impression_item.append(future_im)
 
-    return label_retention, ss_click, ss_impression,future_click_item, future_impression_item
-def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
+    return label_retention, ss_click, ss_impression, future_click_item, future_impression_item
+
+
+def data_generate(file_path, dict_u, dict_i, user_infos, answer_infos):
     user_list = []
 
-    one_item_lists=[]
+    one_item_lists = []
     one_item_click_lists = []
 
-    two_item_lists=[]
+    two_item_lists = []
     two_item_click_lists = []
 
-    three_item_lists=[]
+    three_item_lists = []
     three_item_click_lists = []
 
-    four_item_lists=[]
+    four_item_lists = []
     four_item_click_lists = []
 
-    five_item_lists=[]
+    five_item_lists = []
     five_item_click_lists = []
 
-    six_item_lists=[]
+    six_item_lists = []
     six_item_click_lists = []
 
-    seven_item_lists=[]
+    seven_item_lists = []
     seven_item_click_lists = []
 
-    eight_item_lists=[]
+    eight_item_lists = []
     eight_item_click_lists = []
 
-    nine_item_lists=[]
+    nine_item_lists = []
     nine_item_click_lists = []
 
-    ten_item_lists=[]
+    ten_item_lists = []
     ten_item_click_lists = []
     for line in open(file_path, "r", encoding='utf-8'):
         line = line[:-1].strip('\n').split('\t')
@@ -282,7 +360,7 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
         ten_item_list = []
         ten_item_click_list = []
 
-        cc=line[1].split(',')
+        cc = line[1].split(',')
         for i in range(len(cc)):
             ww = cc[i].split('|')
             if len(ww) == 1:
@@ -291,7 +369,7 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
                 if int(ww[2]) > 0:
                     one_item_list.append(dict_i[ww[0]])
                     one_item_click_list.append(1)
-                elif int(ww[2])==0:
+                elif int(ww[2]) == 0:
                     one_item_list.append(dict_i[ww[0]])
                     one_item_click_list.append(0)
             if int(ww[1]) > 1525279257 + 1 * 24 * 60 * 60 and int(ww[1]) <= 1525279257 + 2 * 24 * 60 * 60:
@@ -336,7 +414,6 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
                 else:
                     seven_item_list.append(dict_i[ww[0]])
                     seven_item_click_list.append(0)
-
 
         cc = line[2].split(',')
         for i in range(len(cc)):
@@ -384,10 +461,10 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
         nine_item_click_lists.append(nine_item_click_list)
         ten_item_lists.append(ten_item_list)
         ten_item_click_lists.append(ten_item_click_list)
-    user=pd.DataFrame(user_list)
+    user = pd.DataFrame(user_list)
 
-    one_items=pd.DataFrame(one_item_lists)
-    one_items=one_items.fillna(-1)
+    one_items = pd.DataFrame(one_item_lists)
+    one_items = one_items.fillna(-1)
     one_items_click = pd.DataFrame(one_item_click_lists)
     one_items_click = one_items_click.fillna(-1)
 
@@ -396,8 +473,8 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     two_items_click = pd.DataFrame(two_item_click_lists)
     two_items_click = two_items_click.fillna(-1)
 
-    three_items=pd.DataFrame(three_item_lists)
-    three_items=three_items.fillna(-1)
+    three_items = pd.DataFrame(three_item_lists)
+    three_items = three_items.fillna(-1)
     three_items_click = pd.DataFrame(three_item_click_lists)
     three_items_click = three_items_click.fillna(-1)
 
@@ -406,8 +483,8 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     four_items_click = pd.DataFrame(four_item_click_lists)
     four_items_click = four_items_click.fillna(-1)
 
-    five_items=pd.DataFrame(five_item_lists)
-    five_items=five_items.fillna(-1)
+    five_items = pd.DataFrame(five_item_lists)
+    five_items = five_items.fillna(-1)
     five_items_click = pd.DataFrame(five_item_click_lists)
     five_items_click = five_items_click.fillna(-1)
 
@@ -416,8 +493,8 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     six_items_click = pd.DataFrame(six_item_click_lists)
     six_items_click = six_items_click.fillna(-1)
 
-    seven_items=pd.DataFrame(seven_item_lists)
-    seven_items=seven_items.fillna(-1)
+    seven_items = pd.DataFrame(seven_item_lists)
+    seven_items = seven_items.fillna(-1)
     seven_items_click = pd.DataFrame(seven_item_click_lists)
     seven_items_click = seven_items_click.fillna(-1)
 
@@ -426,9 +503,8 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     eight_items_click = pd.DataFrame(eight_item_click_lists)
     eight_items_click = eight_items_click.fillna(-1)
 
-
-    nine_items=pd.DataFrame(nine_item_lists)
-    nine_items=nine_items.fillna(-1)
+    nine_items = pd.DataFrame(nine_item_lists)
+    nine_items = nine_items.fillna(-1)
     nine_items_click = pd.DataFrame(nine_item_click_lists)
     nine_items_click = nine_items_click.fillna(-1)
 
@@ -436,7 +512,6 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     ten_items = ten_items.fillna(-1)
     ten_items_click = pd.DataFrame(ten_item_click_lists)
     ten_items_click = ten_items_click.fillna(-1)
-
 
     user = user.to_numpy(dtype=int)
     one_items = one_items.to_numpy(dtype=int)
@@ -459,61 +534,68 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
     nine_items_click = nine_items_click.to_numpy(dtype=int)
     ten_items = ten_items.to_numpy(dtype=int)
     ten_items_click = ten_items_click.to_numpy(dtype=int)
-    items_data=[one_items,two_items,three_items,four_items,five_items,six_items,seven_items,eight_items,nine_items,ten_items]
-    clicks_data=[one_items_click,two_items_click,three_items_click,four_items_click,five_items_click,six_items_click,seven_items_click,eight_items_click,nine_items_click,ten_items_click]
+    items_data = [one_items, two_items, three_items, four_items, five_items,
+                  six_items, seven_items, eight_items, nine_items, ten_items]
+    clicks_data = [one_items_click, two_items_click, three_items_click, four_items_click, five_items_click,
+                   six_items_click, seven_items_click, eight_items_click, nine_items_click, ten_items_click]
 
-    train_retention=[]
-    test_retention=[]
-    items=one_items
-    clicks=one_items_click
+    train_retention = []
+    test_retention = []
+    items = one_items
+    clicks = one_items_click
     for index_column in range(1, 5):
-        label_retention,ss_click, ss_impression,future_click, future_impression= retention_label_generate(items_data[index_column], items_data[index_column + 1],items_data[index_column + 2], clicks_data[index_column],clicks_data[index_column + 1], clicks_data[index_column + 2])
+        label_retention, ss_click, ss_impression, future_click, future_impression = retention_label_generate(
+            items_data[index_column], items_data[index_column + 1], items_data[index_column + 2], clicks_data[index_column], clicks_data[index_column + 1], clicks_data[index_column + 2])
         for index_row in range(0, len(seven_items)):
-            index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[0].tolist()
-            if len(index_click)!=0:
+            index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[
+                0].tolist()
+            if len(index_click) != 0:
                 u = user[index_row].tolist()[0]
-                sex=user_infos[u][0]
-                province=user_infos[u][1]
-                city=user_infos[u][2]
-                row=items[index_row]
-                train=row[index_click]
+                sex = user_infos[u][0]
+                province = user_infos[u][1]
+                city = user_infos[u][2]
+                row = items[index_row]
+                train = row[index_click]
                 hist_i = train.tolist()
-                hist_topic=[]
+                hist_topic = []
                 for hi in hist_i:
                     hist_topic.append(answer_infos[hi][0][0])
-                future_i=future_click[index_row]
-                future_topic=[]
+                future_i = future_click[index_row]
+                future_topic = []
                 for fu in future_i:
                     future_topic.append(answer_infos[fu][0][0])
                 # In zhihurec, the short term is the last 50 items in historical behaviors, the long term is others. If the length of historical behaviors is less than 50, the short term is the same as the long term.
                 # This is because the number of clicks is too small, so we define the short term as the last 50 items in historical behaviors.
                 # In wechat top stories, we define the short term as items for the last three days since they are relatively dense and good for training process.
-                if len(hist_i)>50:
-                    short_term_item=hist_i[-50:]
-                    short_term_topic=hist_topic[-50:]
-                    long_term_item=hist_i[0:-50]
-                    long_term_topic=hist_topic[0:-50]
+                if len(hist_i) > 50:
+                    short_term_item = hist_i[-50:]
+                    short_term_topic = hist_topic[-50:]
+                    long_term_item = hist_i[0:-50]
+                    long_term_topic = hist_topic[0:-50]
                 else:
-                    short_term_item=hist_i
-                    short_term_topic=hist_topic
-                    long_term_item=hist_i
-                    long_term_topic=hist_topic
+                    short_term_item = hist_i
+                    short_term_topic = hist_topic
+                    long_term_item = hist_i
+                    long_term_topic = hist_topic
 
-                train_retention.append([u,sex,province,city,hist_i,hist_topic,long_term_item,long_term_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row],future_i,future_topic])
+                train_retention.append([u, sex, province, city, hist_i, hist_topic, long_term_item, long_term_topic, short_term_item,
+                                       short_term_topic, label_retention[index_row], ss_click[index_row], ss_impression[index_row], future_i, future_topic])
         items = np.concatenate([items, items_data[index_column]], axis=1)
         clicks = np.concatenate([clicks, clicks_data[index_column]], axis=1)
-    items = np.concatenate([items, items_data[5],items_data[6]], axis=1)
-    clicks = np.concatenate([clicks, clicks_data[5],clicks_data[6]], axis=1)
-    label_retention,ss_click,ss_impression,future_click,future_impression = retention_label_generate(items_data[7], items_data[8],items_data[9], clicks_data[7],clicks_data[8], clicks_data[9])
+    items = np.concatenate([items, items_data[5], items_data[6]], axis=1)
+    clicks = np.concatenate([clicks, clicks_data[5], clicks_data[6]], axis=1)
+    label_retention, ss_click, ss_impression, future_click, future_impression = retention_label_generate(
+        items_data[7], items_data[8], items_data[9], clicks_data[7], clicks_data[8], clicks_data[9])
     for index_row in range(0, len(items)):
-        index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[0].tolist()
-        if len(index_click)!=0:
+        index_click = np.where(clicks[index_row, 0:len(clicks[0])] == 1)[
+            0].tolist()
+        if len(index_click) != 0:
             u = user[index_row].tolist()[0]
             sex = user_infos[u][0]
             province = user_infos[u][1]
             city = user_infos[u][2]
-            row=items[index_row]
-            test=row[index_click]
+            row = items[index_row]
+            test = row[index_click]
             hist_i = test.tolist()
             hist_topic = []
             for hi in hist_i:
@@ -532,8 +614,8 @@ def data_generate(file_path,dict_u,dict_i,user_infos,answer_infos):
             future_topic = []
             for fu in future_i:
                 future_topic.append(answer_infos[fu][0])
-            test_retention.append([u,sex,province,city,hist_i,hist_topic,long_term_item,long_term_topic,short_term_item,short_term_topic,label_retention[index_row],ss_click[index_row],ss_impression[index_row],future_i,future_topic])
+            test_retention.append([u, sex, province, city, hist_i, hist_topic, long_term_item, long_term_topic, short_term_item,
+                                  short_term_topic, label_retention[index_row], ss_click[index_row], ss_impression[index_row], future_i, future_topic])
     random.shuffle(test_retention)
     random.shuffle(train_retention)
-    return train_retention,test_retention
-
+    return train_retention, test_retention
